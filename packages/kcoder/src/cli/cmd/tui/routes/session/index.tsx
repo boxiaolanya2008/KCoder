@@ -1395,15 +1395,24 @@ function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: Ass
 function TextPart(props: { last: boolean; part: TextPart; message: AssistantMessage }) {
   const ctx = use()
   const { theme, syntax } = useTheme()
+  // 缓存 trim 后的文本，避免每次重渲染都 new 一个字符串
+  const content = createMemo(() => props.part.text.trim())
+  // 非最后一条 part 说明消息已结束，不需要 streaming 光标动画；
+  // 超长文本（>8000）也关掉 streaming，减少 OpenTUI 重复解析的额外开销
+  const isStreaming = createMemo(() => {
+    if (!props.last) return false
+    if (content().length > 8000) return false
+    return true
+  })
   return (
-    <Show when={props.part.text.trim()}>
+    <Show when={content()}>
       <box id={"text-" + props.part.id} paddingLeft={2} marginTop={1} flexShrink={0}>
         <Switch>
           <Match when={Flag.KCODER_EXPERIMENTAL_MARKDOWN}>
             <markdown
               syntaxStyle={syntax()}
-              streaming={true}
-              content={props.part.text.trim()}
+              streaming={isStreaming()}
+              content={content()}
               conceal={ctx.conceal()}
               fg={theme.markdownText}
               bg={theme.background}
@@ -1413,9 +1422,9 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
             <code
               filetype="markdown"
               drawUnstyledText={false}
-              streaming={true}
+              streaming={isStreaming()}
               syntaxStyle={syntax()}
-              content={props.part.text.trim()}
+              content={content()}
               conceal={ctx.conceal()}
               fg={theme.text}
             />

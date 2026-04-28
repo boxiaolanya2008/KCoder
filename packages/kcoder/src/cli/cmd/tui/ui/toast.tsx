@@ -1,11 +1,13 @@
-import { createContext, useContext, type ParentProps, Show } from "solid-js"
+import { createContext, createMemo, useContext, type ParentProps, Show } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useTheme } from "@tui/context/theme"
 import { useTerminalDimensions } from "@opentui/solid"
 import { SplitBorder } from "../component/border"
-import { TextAttributes } from "@opentui/core"
+import { RGBA, TextAttributes } from "@opentui/core"
 import { Schema } from "effect"
 import { TuiEvent } from "../event"
+import { useKV } from "../context/kv"
+import { createAppear } from "../util/signal"
 
 type ToastInput = Schema.Codec.Encoded<typeof TuiEvent.ToastShow.properties>
 export type ToastOptions = Schema.Schema.Type<typeof TuiEvent.ToastShow.properties>
@@ -16,6 +18,20 @@ export function Toast() {
   const toast = useToast()
   const { theme } = useTheme()
   const dimensions = useTerminalDimensions()
+  const kv = useKV()
+  const enabled = createMemo(() => kv.get("animations_enabled", true))
+  const appear = createAppear(enabled, 220)
+
+  const slideTop = createMemo(() => 2 - (1 - appear()) * 1.5)
+  const bgAlpha = createMemo(() => {
+    const p = appear()
+    return RGBA.fromValues(
+      theme.backgroundPanel.r,
+      theme.backgroundPanel.g,
+      theme.backgroundPanel.b,
+      Math.round(theme.backgroundPanel.a * p),
+    )
+  })
 
   return (
     <Show when={toast.currentToast}>
@@ -24,14 +40,14 @@ export function Toast() {
           position="absolute"
           justifyContent="center"
           alignItems="flex-start"
-          top={2}
+          top={slideTop()}
           right={2}
           maxWidth={Math.min(60, dimensions().width - 6)}
           paddingLeft={2}
           paddingRight={2}
           paddingTop={1}
           paddingBottom={1}
-          backgroundColor={theme.backgroundPanel}
+          backgroundColor={bgAlpha()}
           borderColor={theme[current().variant]}
           border={["left", "right"]}
           customBorderChars={SplitBorder.customBorderChars}

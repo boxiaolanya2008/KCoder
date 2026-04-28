@@ -1,5 +1,5 @@
 import { Prompt, type PromptRef } from "@tui/component/prompt"
-import { createEffect, createSignal } from "solid-js"
+import { createEffect, createMemo, createSignal } from "solid-js"
 import { useProject } from "../context/project"
 import { useSync } from "../context/sync"
 import { Toast } from "../ui/toast"
@@ -10,6 +10,8 @@ import { useLocal } from "../context/local"
 import { useTheme } from "../context/theme"
 import { HomeFooter } from "../feature-plugins/home/footer"
 import { logo } from "@/cli/logo"
+import { useKV } from "../context/kv"
+import { createAppear } from "../util/signal"
 
 let once = false
 const placeholder = {
@@ -26,6 +28,9 @@ export function Home() {
   const args = useArgs()
   const local = useLocal()
   const { theme } = useTheme()
+  const kv = useKV()
+  const enabled = createMemo(() => kv.get("animations_enabled", true))
+  const appear = createAppear(enabled, 300)
   let sent = false
 
   const bind = (r: PromptRef | undefined) => {
@@ -53,11 +58,13 @@ export function Home() {
     r.submit()
   })
 
+  const slideOffset = createMemo(() => (1 - appear()) * 2)
+
   return (
     <>
       <box flexGrow={1} flexDirection="column" height="100%" alignItems="center" paddingLeft={4} paddingRight={4}>
         <box flexGrow={1} minHeight={0} />
-        <box flexShrink={0} alignItems="center" gap={1}>
+        <box flexShrink={0} alignItems="center" gap={1} paddingTop={slideOffset()}>
           <box flexDirection="column" alignItems="center">
             {logo.left.map((line, i) => (
               <text fg={theme.primary}>

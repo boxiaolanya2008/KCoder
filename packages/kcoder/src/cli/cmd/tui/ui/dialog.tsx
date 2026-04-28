@@ -1,11 +1,13 @@
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid"
-import { batch, createContext, Show, useContext, type JSX, type ParentProps } from "solid-js"
+import { batch, createContext, createMemo, Show, useContext, type JSX, type ParentProps } from "solid-js"
 import { useTheme } from "@tui/context/theme"
 import { MouseButton, Renderable, RGBA } from "@opentui/core"
 import { createStore } from "solid-js/store"
 import { useToast } from "./toast"
 import { Flag } from "@kcoder/core/flag/flag"
 import * as Selection from "@tui/util/selection"
+import { useKV } from "../context/kv"
+import { createAppear } from "../util/signal"
 
 export function Dialog(
   props: ParentProps<{
@@ -16,6 +18,9 @@ export function Dialog(
   const dimensions = useTerminalDimensions()
   const { theme } = useTheme()
   const renderer = useRenderer()
+  const kv = useKV()
+  const enabled = createMemo(() => kv.get("animations_enabled", true))
+  const appear = createAppear(enabled, 180)
 
   let dismiss = false
   const width = () => {
@@ -23,6 +28,13 @@ export function Dialog(
     if (props.size === "large") return 88
     return 60
   }
+
+  const bgAlpha = createMemo(() => Math.round(150 * appear()))
+  const contentOffset = createMemo(() => {
+    const p = appear()
+    // 轻微上滑：初始 paddingTop 比正常多 1 行，然后回到正常
+    return Math.max(0, (1 - p) * 1.5)
+  })
 
   return (
     <box
@@ -41,10 +53,10 @@ export function Dialog(
       alignItems="center"
       position="absolute"
       zIndex={3000}
-      paddingTop={dimensions().height / 4}
+      paddingTop={dimensions().height / 4 - contentOffset()}
       left={0}
       top={0}
-      backgroundColor={RGBA.fromInts(0, 0, 0, 150)}
+      backgroundColor={RGBA.fromInts(0, 0, 0, bgAlpha())}
     >
       <box
         onMouseUp={(e) => {

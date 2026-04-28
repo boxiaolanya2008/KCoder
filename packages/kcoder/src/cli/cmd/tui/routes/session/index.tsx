@@ -85,6 +85,7 @@ import { formatTranscript } from "../../util/transcript"
 import { UI } from "@/cli/ui.ts"
 import { useTuiConfig } from "../../context/tui-config"
 import { getScrollAcceleration } from "../../util/scroll"
+import { createAppear } from "../../util/signal"
 
 import { DialogGoUpsell } from "../../component/dialog-go-upsell"
 import { SessionRetry } from "@/session/retry"
@@ -1172,13 +1173,19 @@ export function Session() {
             </scrollbox>
             <box flexShrink={0}>
               <Show when={permissions().length > 0}>
-                <PermissionPrompt request={permissions()[0]} />
+                <AnimatedWrap>
+                  <PermissionPrompt request={permissions()[0]} />
+                </AnimatedWrap>
               </Show>
               <Show when={permissions().length === 0 && questions().length > 0}>
-                <QuestionPrompt request={questions()[0]} />
+                <AnimatedWrap>
+                  <QuestionPrompt request={questions()[0]} />
+                </AnimatedWrap>
               </Show>
               <Show when={session()?.parentID}>
-                <SubagentFooter />
+                <AnimatedWrap>
+                  <SubagentFooter />
+                </AnimatedWrap>
               </Show>
               <Show when={visible()}>
                 <Prompt
@@ -1250,14 +1257,17 @@ function UserMessage(props: {
   })
   const files = createMemo(() => props.parts.flatMap((x) => (x.type === "file" ? [x] : [])))
   const { theme } = useTheme()
+  const kv = useKV()
+  const enabled = createMemo(() => kv.get("animations_enabled", true))
+  const appear = createAppear(enabled, 280, props.index * 30) // stagger 每条消息错开 30ms
 
   return (
     <>
       <Show when={text()}>
         <box
           id={props.message.id}
-          marginTop={props.index === 0 ? 0 : 1}
-          paddingTop={1}
+          marginTop={props.index === 0 ? 0 : appear()}
+          paddingTop={appear()}
           paddingBottom={1}
           paddingLeft={2}
           flexShrink={0}
@@ -1294,6 +1304,9 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
   const ctx = use()
   const { theme } = useTheme()
   const sync = useSync()
+  const kv = useKV()
+  const enabled = createMemo(() => kv.get("animations_enabled", true))
+  const appear = createAppear(enabled, 280)
   const messages = createMemo(() => sync.data.message[props.message.sessionID] ?? [])
   const model = createMemo(() => Model.name(ctx.providers(), props.message.providerID, props.message.modelID))
 
@@ -1310,7 +1323,7 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
   })
 
   return (
-    <>
+    <box marginTop={appear()}>
       <For each={props.parts}>
         {(part, index) => {
           const component = createMemo(() => PART_MAPPING[part.type as keyof typeof PART_MAPPING])
@@ -1351,7 +1364,7 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
           </text>
         </box>
       </Show>
-    </>
+    </box>
   )
 }
 
@@ -2218,4 +2231,16 @@ function filetype(input?: string) {
   const language = LANGUAGE_EXTENSIONS[ext]
   if (["typescriptreact", "javascriptreact", "javascript"].includes(language)) return "typescript"
   return language
+}
+
+function AnimatedWrap(props: { children: any }) {
+  const kv = useKV()
+  const enabled = createMemo(() => kv.get("animations_enabled", true))
+  const appear = createAppear(enabled, 250)
+
+  return (
+    <box marginTop={appear()} paddingTop={appear()}>
+      {props.children}
+    </box>
+  )
 }

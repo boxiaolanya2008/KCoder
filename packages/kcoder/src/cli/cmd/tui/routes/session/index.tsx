@@ -1262,6 +1262,7 @@ function UserMessage(props: {
           paddingLeft={2}
           flexShrink={0}
           onMouseUp={props.onMouseUp}
+          backgroundColor={theme.backgroundElement}
         >
           <text fg={theme.text}>{text()}</text>
           <Show when={files().length}>

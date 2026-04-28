@@ -296,6 +296,13 @@ export function plan(input: { slug: string; time: { created: number } }) {
   return path.join(base, [input.time.created, input.slug].join("-") + ".md")
 }
 
+export function spec(input: { slug: string; time: { created: number } }) {
+  const base = Instance.project.vcs
+    ? path.join(Instance.worktree, ".kcoder", "specs")
+    : path.join(Global.Path.data, "specs")
+  return path.join(base, [input.time.created, input.slug].join("-") + ".md")
+}
+
 export const getUsage = (input: { model: Provider.Model; usage: LanguageModelUsage; metadata?: ProviderMetadata }) => {
   const safe = (value: number) => {
     if (!Number.isFinite(value)) return 0

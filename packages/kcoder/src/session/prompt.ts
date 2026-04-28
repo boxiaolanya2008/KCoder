@@ -19,6 +19,7 @@ import { SystemPrompt } from "./system"
 import { Instruction } from "./instruction"
 import { Plugin } from "../plugin"
 import PROMPT_PLAN from "../session/prompt/plan.txt"
+import PROMPT_SPEC from "../session/prompt/spec.txt"
 import BUILD_SWITCH from "../session/prompt/build-switch.txt"
 import MAX_STEPS from "../session/prompt/max-steps.txt"
 import { ToolRegistry } from "../tool"
@@ -239,8 +240,29 @@ export const layer = Layer.effect(
             synthetic: true,
           })
         }
+        if (input.agent.name === "spec") {
+          userMessage.parts.push({
+            id: PartID.ascending(),
+            messageID: userMessage.info.id,
+            sessionID: userMessage.info.sessionID,
+            type: "text",
+            text: PROMPT_SPEC,
+            synthetic: true,
+          })
+        }
         const wasPlan = input.messages.some((msg) => msg.info.role === "assistant" && msg.info.agent === "plan")
         if (wasPlan && input.agent.name === "build") {
+          userMessage.parts.push({
+            id: PartID.ascending(),
+            messageID: userMessage.info.id,
+            sessionID: userMessage.info.sessionID,
+            type: "text",
+            text: BUILD_SWITCH,
+            synthetic: true,
+          })
+        }
+        const wasSpec = input.messages.some((msg) => msg.info.role === "assistant" && msg.info.agent === "spec")
+        if (wasSpec && input.agent.name === "build") {
           userMessage.parts.push({
             id: PartID.ascending(),
             messageID: userMessage.info.id,
@@ -269,17 +291,38 @@ export const layer = Layer.effect(
         return input.messages
       }
 
-      if (input.agent.name !== "plan" || assistantMessage?.info.agent === "plan") return input.messages
+      if (input.agent.name !== "spec" && assistantMessage?.info.agent === "spec") {
+        const spec = Session.spec(input.session)
+        if (!(yield* fsys.existsSafe(spec))) return input.messages
+        const part = yield* sessions.updatePart({
+          id: PartID.ascending(),
+          messageID: userMessage.info.id,
+          sessionID: userMessage.info.sessionID,
+          type: "text",
+          text: `${BUILD_SWITCH}\n\nA spec file exists at ${spec}. You should execute on the spec defined within it`,
+          synthetic: true,
+        })
+        userMessage.parts.push(part)
+        return input.messages
+      }
 
-      const plan = Session.plan(input.session)
-      const exists = yield* fsys.existsSafe(plan)
-      if (!exists) yield* fsys.ensureDir(path.dirname(plan)).pipe(Effect.catch(Effect.die))
-      const part = yield* sessions.updatePart({
-        id: PartID.ascending(),
-        messageID: userMessage.info.id,
-        sessionID: userMessage.info.sessionID,
-        type: "text",
-        text: `<system-reminder>
+      if (
+        (input.agent.name !== "plan" && input.agent.name !== "spec") ||
+        (input.agent.name === "plan" && assistantMessage?.info.agent === "plan") ||
+        (input.agent.name === "spec" && assistantMessage?.info.agent === "spec")
+      )
+        return input.messages
+
+      if (input.agent.name === "plan") {
+        const plan = Session.plan(input.session)
+        const exists = yield* fsys.existsSafe(plan)
+        if (!exists) yield* fsys.ensureDir(path.dirname(plan)).pipe(Effect.catch(Effect.die))
+        const part = yield* sessions.updatePart({
+          id: PartID.ascending(),
+          messageID: userMessage.info.id,
+          sessionID: userMessage.info.sessionID,
+          type: "text",
+          text: `<system-reminder>
 Plan mode is active. The user indicated that they do not want you to execute yet -- you MUST NOT make any edits (with the exception of the plan file mentioned below), run any non-readonly tools (including changing configs or making commits), or otherwise make any changes to the system. This supersedes any other instructions you have received.
 
 ## Plan File Info:
@@ -348,10 +391,70 @@ This is critical - your turn should only end with either asking the user a quest
 **Important:** Use question tool to clarify requirements/approach, use plan_exit to request plan approval. Do NOT use question tool to ask "Is this plan okay?" - that's what plan_exit does.
 
 NOTE: At any point in time through this workflow you should feel free to ask the user questions or clarifications. Don't make large assumptions about user intent. The goal is to present a well researched plan to the user, and tie any loose ends before implementation begins.
-</system-reminder>`,
-        synthetic: true,
-      })
-      userMessage.parts.push(part)
+      </system-reminder>`,
+          synthetic: true,
+        })
+        userMessage.parts.push(part)
+        return input.messages
+      }
+
+      if (input.agent.name === "spec") {
+        const spec = Session.spec(input.session)
+        const exists = yield* fsys.existsSafe(spec)
+        if (!exists) yield* fsys.ensureDir(path.dirname(spec)).pipe(Effect.catch(Effect.die))
+        const part = yield* sessions.updatePart({
+          id: PartID.ascending(),
+          messageID: userMessage.info.id,
+          sessionID: userMessage.info.sessionID,
+          type: "text",
+          text: `<system-reminder>
+Spec mode is active. The user indicated that they do not want you to execute yet -- you MUST NOT make any edits (with the exception of the spec file mentioned below), run any non-readonly tools (including changing configs or making commits), or otherwise make any changes to the system. This supersedes any other instructions you have received.
+
+## Spec File Info:
+${exists ? `A spec file already exists at ${spec}. You can read it and make incremental edits using the edit tool.` : `No spec file exists yet. You should create your spec at ${spec} using the write tool.`}
+You should build your spec incrementally by writing to or editing this file. NOTE that this is the only file you are allowed to edit - other than this you are only allowed to take READ-ONLY actions.
+
+## Spec Workflow
+
+### Phase 1: Initial Understanding
+Goal: Gain a comprehensive understanding of the user's request by reading through code and asking them questions.
+
+1. Focus on understanding the user's request and the code associated with their request
+2. **Launch up to 3 explore agents IN PARALLEL** to efficiently explore the codebase.
+3. After exploring the code, use the question tool to clarify ambiguities in the user request up front.
+
+### Phase 2: Design
+Goal: Design an implementation approach and write the technical specification.
+
+Launch general agent(s) to design the implementation based on the user's intent and your exploration results from Phase 1.
+
+### Phase 3: Review
+Goal: Review the spec and ensure alignment with the user's intentions.
+1. Read the critical files identified by agents to deepen your understanding
+2. Ensure that the spec aligns with the user's original request
+3. Use question tool to clarify any remaining questions with the user
+
+### Phase 4: Final Spec
+Goal: Write your final spec to the spec file (the only file you can edit).
+- Include only your recommended approach, not all alternatives
+- Ensure that the spec file is concise enough to scan quickly, but detailed enough to execute effectively
+- Include the paths of critical files to be modified
+- Include a verification section describing how to test the changes end-to-end
+
+### Phase 5: Call plan_exit tool
+At the very end of your turn, once you have asked the user questions and are happy with your final spec file - you should always call plan_exit to indicate to the user that you are done.
+This is critical - your turn should only end with either asking the user a question or calling plan_exit. Do not stop unless it is for these 2 reasons.
+
+**Important:** Use question tool to clarify requirements/approach, use plan_exit to request spec approval. Do NOT use question tool to ask "Is this spec okay?" - that's what plan_exit does.
+
+NOTE: At any point in time through this workflow you should feel free to ask the user questions or clarifications. Don't make large assumptions about user intent. The goal is to present a well researched spec to the user before implementation begins.
+      </system-reminder>`,
+          synthetic: true,
+        })
+        userMessage.parts.push(part)
+        return input.messages
+      }
+
       return input.messages
     })
 

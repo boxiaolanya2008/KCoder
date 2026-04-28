@@ -29,7 +29,7 @@
     },
     "packages/core": {
       "name": "@kcoder/core",
-      "version": "1.14.28",
+      "version": "1.14.29",
       "dependencies": {
         "@effect/opentelemetry": "catalog:",
         "@effect/platform-node": "catalog:",
@@ -60,7 +60,7 @@
     },
     "packages/kcoder": {
       "name": "kcoder",
-      "version": "1.14.28",
+      "version": "1.14.29",
       "bin": {
         "kcoder": "./bin/kcoder.cjs",
       },
@@ -203,7 +203,7 @@
     },
     "packages/plugin": {
       "name": "@kcoder/plugin",
-      "version": "1.14.28",
+      "version": "1.14.29",
       "dependencies": {
         "@kcoder/sdk": "workspace:*",
         "effect": "catalog:",
@@ -238,7 +238,7 @@
     },
     "packages/sdk/js": {
       "name": "@kcoder/sdk",
-      "version": "1.14.28",
+      "version": "1.14.29",
       "dependencies": {
         "cross-spawn": "catalog:",
       },

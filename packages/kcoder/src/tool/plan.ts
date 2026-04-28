@@ -31,17 +31,19 @@ export const PlanExitTool = Tool.define(
       execute: (_params: {}, ctx: Tool.Context) =>
         Effect.gen(function* () {
           const info = yield* session.get(ctx.sessionID)
-          const plan = path.relative(Instance.worktree, Session.plan(info))
+          const isSpec = ctx.agent === "spec"
+          const filePath = path.relative(Instance.worktree, isSpec ? Session.spec(info) : Session.plan(info))
+          const fileType = isSpec ? "spec" : "plan"
           const answers = yield* question.ask({
             sessionID: ctx.sessionID,
             questions: [
               {
-                question: `Plan at ${plan} is complete. Would you like to switch to the build agent and start implementing?`,
+                question: `${fileType.charAt(0).toUpperCase() + fileType.slice(1)} at ${filePath} is complete. Would you like to switch to the build agent and start implementing?`,
                 header: "Build Agent",
                 custom: false,
                 options: [
-                  { label: "Yes", description: "Switch to build agent and start implementing the plan" },
-                  { label: "No", description: "Stay with plan agent to continue refining the plan" },
+                  { label: "Yes", description: `Switch to build agent and start implementing the ${fileType}` },
+                  { label: "No", description: `Stay with ${fileType} agent to continue refining the ${fileType}` },
                 ],
               },
             ],
@@ -66,7 +68,7 @@ export const PlanExitTool = Tool.define(
             messageID: msg.id,
             sessionID: ctx.sessionID,
             type: "text",
-            text: `The plan at ${plan} has been approved, you can now edit files. Execute the plan`,
+            text: `The ${fileType} at ${filePath} has been approved, you can now edit files. Execute the ${fileType}`,
             synthetic: true,
           } satisfies MessageV2.TextPart)
 
